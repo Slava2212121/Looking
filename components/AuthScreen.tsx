@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, KeyRound, Terminal } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, KeyRound, Terminal, AlertTriangle } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import { Language } from '../types';
 
@@ -36,6 +36,17 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
     name: '',
     handle: ''
   });
+
+  // Explicit initialization of EmailJS on mount
+  useEffect(() => {
+    if (EMAILJS_PUBLIC_KEY) {
+      try {
+        emailjs.init(EMAILJS_PUBLIC_KEY);
+      } catch (e) {
+        console.error('EmailJS Init Error:', e);
+      }
+    }
+  }, []);
 
   const handleInitAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,24 +89,33 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
           email: formData.email,    
           passcode: code,           
           time: new Date().toLocaleTimeString(), 
-          to_name: formData.name || 'User',
-          from_name: 'Blend' // Указываем имя отправителя
-        },
-        EMAILJS_PUBLIC_KEY
+          to_name: formData.name || 'User', // Fallback for Login mode where name isn't provided
+          from_name: 'Blend' 
+        }
+        // Note: Public key is already initialized in useEffect, but passing it here is safe too
       );
 
       console.log('✅ Email sent successfully to:', formData.email);
       setSuccessMessage(`Code sent to ${formData.email}`);
+      
+      // ONLY Move to next step if email sent successfully
+      setStep('VERIFY');
 
-    } catch (err) {
-      console.warn('⚠️ Email send failed. Reason:', err);
-      // Fallback to Demo Mode allows login even if email quota exceeded or blocked
-      setIsDemoMode(true);
-      // Simulate delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    } catch (err: any) {
+      console.error('⚠️ Email send failed:', err);
+      
+      // Extract meaningful error text
+      let errorMsg = 'Failed to send email.';
+      if (err.text) errorMsg += ` (${err.text})`;
+      else if (err.message) errorMsg += ` (${err.message})`;
+      
+      // If it's a limit issue or network issue, suggest Demo Mode
+      setError(`${errorMsg} Try Demo Mode.`);
+      
+      // IMPORTANT: In case of error, we DO NOT move to VERIFY automatically
+      // so the user sees the error message.
     } finally {
       setIsLoading(false);
-      setStep('VERIFY');
     }
   };
 
@@ -143,6 +163,14 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
      }, 1500);
   };
 
+  // Helper to force demo mode manually if email fails
+  const triggerManualDemo = () => {
+      setError('');
+      setIsDemoMode(true);
+      setStep('VERIFY');
+      setGeneratedCode('123456'); // Simple code for manual demo trigger
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg-main)] flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
       
@@ -182,6 +210,21 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 text-green-500 rounded-xl text-sm text-center animate-in fade-in slide-in-from-top-2">
               {successMessage}
            </div>
+        )}
+
+        {/* Global Error Display with Action */}
+        {error && (
+            <div className="mb-4 p-3 bg-[#FF5B5B]/10 border border-[#FF5B5B]/30 rounded-xl animate-in fade-in slide-in-from-top-2">
+                <p className="text-[#FF5B5B] text-sm text-center mb-2">{error}</p>
+                {/* If error occurs, offer Demo Mode immediately */}
+                <button 
+                    onClick={triggerManualDemo}
+                    className="w-full py-1.5 bg-[#FF5B5B]/20 hover:bg-[#FF5B5B]/30 text-[#FF5B5B] text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                    <Terminal size={12} />
+                    Switch to Demo Mode
+                </button>
+            </div>
         )}
 
         {step === 'INPUT' ? (
@@ -230,7 +273,6 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
                   className={`w-full bg-[var(--bg-main)] border rounded-xl py-3 pl-10 pr-4 text-[var(--text-main)] placeholder-[var(--text-muted)] outline-none transition-colors ${error ? 'border-[#FF5B5B]' : 'border-[var(--border)] focus:border-[var(--primary)]'}`}
                 />
               </div>
-              {error && <p className="text-[#FF5B5B] text-xs px-2">{error}</p>}
             </div>
 
             {mode !== 'FORGOT' && (
@@ -313,10 +355,6 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
                 />
              </div>
              
-             {error && (
-               <p className="text-[#FF5B5B] text-sm text-center bg-[#FF5B5B]/10 py-2 rounded-lg">{error}</p>
-             )}
-
              <button 
               type="submit"
               disabled={isLoading || verificationCode.length < 6}
@@ -336,6 +374,16 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
             >
                {t.auth.resend}
             </button>
+
+            {!isDemoMode && (
+                <button 
+                    type="button"
+                    onClick={triggerManualDemo}
+                    className="w-full text-[var(--text-muted)] text-xs hover:text-[var(--primary)] mt-4 underline decoration-dotted opacity-70 hover:opacity-100 transition-opacity"
+                >
+                    {t.auth.troubleReceiving || 'Trouble receiving code?'}
+                </button>
+            )}
             
           </form>
         ) : (
