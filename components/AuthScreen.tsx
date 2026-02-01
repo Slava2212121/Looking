@@ -1,6 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, KeyRound, Bell, HelpCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, KeyRound, Terminal } from 'lucide-react';
+import emailjs from '@emailjs/browser';
 import { Language } from '../types';
+
+// --- CONFIGURATION START ---
+// Ваши ключи EmailJS
+const EMAILJS_SERVICE_ID = 'service_k0gy4oj';
+const EMAILJS_TEMPLATE_ID = 'template_kv0ea3h';
+const EMAILJS_PUBLIC_KEY = 'Pza0COcO4XZpSKFLe';
+// --- CONFIGURATION END ---
 
 interface AuthScreenProps {
   onLogin: (userData?: { name: string; handle: string; email: string }) => void;
@@ -19,6 +27,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
   const [generatedCode, setGeneratedCode] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isDemoMode, setIsDemoMode] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -28,10 +37,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
     handle: ''
   });
 
-  const handleInitAuth = (e: React.FormEvent) => {
+  const handleInitAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
+    setIsDemoMode(false);
 
     // --- REQUIREMENT: Only Mail.ru (and aliases) and Gmail ---
     const allowedDomains = /@(gmail\.com|mail\.ru|inbox\.ru|list\.ru|bk\.ru)$/i;
@@ -53,14 +63,40 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCode(code);
 
-    // Simulate API call to send email
-    setTimeout(() => {
+    try {
+      // Basic check to ensure keys are not empty
+      if (!EMAILJS_SERVICE_ID || !EMAILJS_PUBLIC_KEY) {
+        throw new Error('EmailJS keys are missing');
+      }
+
+      // Attempt to send real email
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          // Variables must match your EmailJS template {{variables}}
+          email: formData.email,    
+          passcode: code,           
+          time: new Date().toLocaleTimeString(), 
+          to_name: formData.name || 'User',
+          from_name: 'Blend' // Указываем имя отправителя
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+
+      console.log('✅ Email sent successfully to:', formData.email);
+      setSuccessMessage(`Code sent to ${formData.email}`);
+
+    } catch (err) {
+      console.warn('⚠️ Email send failed. Reason:', err);
+      // Fallback to Demo Mode allows login even if email quota exceeded or blocked
+      setIsDemoMode(true);
+      // Simulate delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    } finally {
       setIsLoading(false);
       setStep('VERIFY');
-      
-      console.log(`[SMTP SIMULATION] 📧 Email sent to ${formData.email}. \n🔒 Verification Code: ${code}`);
-      
-    }, 1500);
+    }
   };
 
   const handleVerify = (e: React.FormEvent) => {
@@ -143,7 +179,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
         </div>
 
         {successMessage && (
-           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 text-green-500 rounded-xl text-sm text-center">
+           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 text-green-500 rounded-xl text-sm text-center animate-in fade-in slide-in-from-top-2">
               {successMessage}
            </div>
         )}
@@ -246,8 +282,22 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
                    <ShieldCheck size={32} />
                 </div>
                 <h3 className="text-[var(--text-main)] text-xl font-bold mb-2">{t.auth.securityCheck}</h3>
-                <p className="text-[var(--text-muted)] text-sm mb-6">{t.auth.codeSent}</p>
+                <p className="text-[var(--text-muted)] text-sm mb-6">
+                  {isDemoMode ? t.auth.codeSent + ' (Demo Mode)' : successMessage || t.auth.codeSent}
+                </p>
              </div>
+             
+             {/* DEMO CODE DISPLAY - Only visible in Demo Mode */}
+             {isDemoMode && (
+               <div className="bg-[var(--primary)]/10 border border-[var(--primary)]/30 text-[var(--primary)] p-4 rounded-xl mb-6 text-center animate-in fade-in slide-in-from-top-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                     <Terminal size={16} />
+                     <p className="text-xs font-bold uppercase tracking-wider">Demo Simulation</p>
+                  </div>
+                  <p className="text-sm opacity-80 mb-1">Email service not configured. Use this:</p>
+                  <p className="text-3xl font-mono font-black tracking-[0.5em] select-all cursor-pointer hover:scale-105 transition-transform">{generatedCode}</p>
+               </div>
+             )}
 
              <div className="relative group">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] group-focus-within:text-[var(--primary)] transition-colors" size={20} />
@@ -287,9 +337,6 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
                {t.auth.resend}
             </button>
             
-            <p className="text-center text-[10px] text-[var(--primary)] opacity-60 mt-4">
-               (Developer Mode: Check browser console for code)
-            </p>
           </form>
         ) : (
           /* Step 3: Reset Password (New) */
