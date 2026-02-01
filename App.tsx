@@ -59,7 +59,6 @@ const SECURITY_CONFIG = {
   maxInputLength: 500
 };
 
-const MAX_AUTO_LOGINS = 5;
 const SESSION_KEY = 'blend_session_v1';
 
 const Logo = () => (
@@ -133,26 +132,19 @@ const App: React.FC = () => {
 
   // --- AUTO LOGIN LOGIC ---
   useEffect(() => {
-    const storedSession = localStorage.getItem(SESSION_KEY);
+    // Check local storage (persistent) first, then session storage (temporary)
+    const storedSession = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+    
     if (storedSession) {
       try {
-        const { user, count } = JSON.parse(storedSession);
-        
-        if (count < MAX_AUTO_LOGINS) {
-          setCurrentUser(user);
-          setIsAuthenticated(true);
-          const newCount = count + 1;
-          localStorage.setItem(SESSION_KEY, JSON.stringify({
-             user,
-             count: newCount
-          }));
-          console.log(`[Auto-Login] Active. Session ${newCount}/${MAX_AUTO_LOGINS}`);
-        } else {
-          localStorage.removeItem(SESSION_KEY);
-        }
+        const { user } = JSON.parse(storedSession);
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        console.log(`[Auto-Login] Welcome back, ${user.name}`);
       } catch (error) {
         console.error("Session parse error", error);
         localStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(SESSION_KEY);
       }
     }
   }, []);
@@ -218,7 +210,7 @@ const App: React.FC = () => {
   };
 
   // --- Handlers ---
-  const handleLogin = (userData?: { name: string; handle: string; email: string }) => {
+  const handleLogin = (userData?: { name: string; handle: string; email: string }, rememberMe: boolean = false) => {
     let finalUser: User;
 
     if (userData) {
@@ -255,10 +247,16 @@ const App: React.FC = () => {
     setIsAuthenticated(true);
     setCurrentView('HOME');
 
-    localStorage.setItem(SESSION_KEY, JSON.stringify({
-      user: finalUser,
-      count: 0
-    }));
+    const sessionData = JSON.stringify({ user: finalUser });
+    
+    // Store in Local Storage if "Remember Me" is checked, otherwise Session Storage
+    if (rememberMe) {
+        localStorage.setItem(SESSION_KEY, sessionData);
+        sessionStorage.removeItem(SESSION_KEY); // clean up other storage
+    } else {
+        sessionStorage.setItem(SESSION_KEY, sessionData);
+        localStorage.removeItem(SESSION_KEY); // clean up other storage
+    }
   };
 
   const handleLogout = () => {
@@ -266,7 +264,10 @@ const App: React.FC = () => {
     setSelectedChatId(null);
     setIsSecurityLocked(false);
     violationCount.current = 0;
+    
+    // Clear both storages
     localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
   };
 
   const handleUpdateProfile = (updates: Partial<User>) => {
@@ -279,13 +280,12 @@ const App: React.FC = () => {
         : p
     ));
 
-    const storedSession = localStorage.getItem(SESSION_KEY);
-    if (storedSession) {
-       const session = JSON.parse(storedSession);
-       localStorage.setItem(SESSION_KEY, JSON.stringify({
-         ...session,
-         user: updatedUser
-       }));
+    // Update persistent session if it exists
+    const sessionData = JSON.stringify({ user: updatedUser });
+    if (localStorage.getItem(SESSION_KEY)) {
+        localStorage.setItem(SESSION_KEY, sessionData);
+    } else if (sessionStorage.getItem(SESSION_KEY)) {
+        sessionStorage.setItem(SESSION_KEY, sessionData);
     }
   };
 

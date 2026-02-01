@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, KeyRound, Terminal, AlertTriangle } from 'lucide-react';
+import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, KeyRound, Terminal, CheckSquare, Square } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import { Language } from '../types';
 
@@ -11,7 +11,7 @@ const EMAILJS_PUBLIC_KEY = 'Pza0COcO4XZpSKFLe';
 // --- CONFIGURATION END ---
 
 interface AuthScreenProps {
-  onLogin: (userData?: { name: string; handle: string; email: string }) => void;
+  onLogin: (userData?: { name: string; handle: string; email: string }, rememberMe?: boolean) => void;
   existingEmails: string[];
   lang: Language;
   setLang: (lang: Language) => void;
@@ -28,6 +28,9 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isDemoMode, setIsDemoMode] = useState(false);
+  
+  // Remember Me State
+  const [rememberMe, setRememberMe] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -80,6 +83,13 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
         throw new Error('EmailJS keys are missing');
       }
 
+      // Calculate time + 15 mins for expiry
+      const now = new Date();
+      const expiry = new Date(now.getTime() + 15 * 60000); // Add 15 minutes
+      
+      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const expiryString = expiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
       // Attempt to send real email
       await emailjs.send(
         EMAILJS_SERVICE_ID,
@@ -88,11 +98,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
           // Variables must match your EmailJS template {{variables}}
           email: formData.email,    
           passcode: code,           
-          time: new Date().toLocaleTimeString(), 
+          time: timeString,
+          expiry_time: expiryString, // New variable for correct expiry
           to_name: formData.name || 'User', // Fallback for Login mode where name isn't provided
           from_name: 'Blend' 
         }
-        // Note: Public key is already initialized in useEffect, but passing it here is safe too
       );
 
       console.log('✅ Email sent successfully to:', formData.email);
@@ -112,8 +122,6 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
       // If it's a limit issue or network issue, suggest Demo Mode
       setError(`${errorMsg} Try Demo Mode.`);
       
-      // IMPORTANT: In case of error, we DO NOT move to VERIFY automatically
-      // so the user sees the error message.
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +141,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
              name: formData.name, 
              handle: formData.handle.startsWith('@') ? formData.handle : `@${formData.handle}`,
              email: formData.email
-          });
+          }, rememberMe);
         } else if (mode === 'FORGOT') {
            setStep('RESET_NEW_PASS');
         } else {
@@ -142,7 +150,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
             name: '', // Handled in App.tsx based on email or default
             handle: '', 
             email: formData.email 
-          }); 
+          }, rememberMe); 
         }
       } else {
         setError(t.auth.wrongCode);
@@ -289,8 +297,18 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, existingEmails, lang, 
                </div>
             )}
             
+            {/* Remember Me Checkbox */}
             {mode === 'LOGIN' && (
-               <div className="flex justify-end">
+               <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setRememberMe(!rememberMe)}
+                    className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+                  >
+                     {rememberMe ? <CheckSquare size={18} className="text-[var(--primary)]" /> : <Square size={18} />}
+                     {t.auth.rememberMe}
+                  </button>
+
                   <button 
                      type="button" 
                      onClick={() => { setMode('FORGOT'); setError(''); }}
