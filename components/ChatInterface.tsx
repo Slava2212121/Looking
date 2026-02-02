@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Chat, User, MessageType, ChatCategory } from '../types';
 import { Send, Phone, Video, Info, ArrowLeft, Mic, StopCircle, Play, PhoneOff, VideoOff, MicOff, MessageSquare, Megaphone, User as UserIcon } from 'lucide-react';
@@ -28,6 +29,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recordingInterval = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const activeChat = chats.find(c => c.id === selectedChatId);
 
@@ -56,21 +59,54 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     };
   }, [isRecording]);
 
+  const startRecording = async () => {
+     try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+
+        mediaRecorderRef.current.ondataavailable = (event) => {
+           if (event.data.size > 0) {
+              audioChunksRef.current.push(event.data);
+           }
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+     } catch (err) {
+        console.error("Microphone access denied", err);
+     }
+  };
+
+  const stopRecordingAndSend = () => {
+     if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.onstop = () => {
+           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+           const url = URL.createObjectURL(audioBlob); // Only valid for this session
+           
+           if (!selectedChatId) return;
+           
+           const mins = Math.floor(recordingTime / 60);
+           const secs = recordingTime % 60;
+           const duration = `${mins}:${secs.toString().padStart(2, '0')}`;
+           
+           // Hack: In real app, we'd upload blob. Here we pass the text as the URL
+           // but our onSendMessage expects text. We'll overload 'text' to hold the URL for AUDIO type.
+           onSendMessage(selectedChatId, url, MessageType.AUDIO, duration);
+           
+           // Stop all tracks
+           mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+     }
+  };
+
   const handleSend = () => {
     if (!inputText.trim() || !selectedChatId) return;
     onSendMessage(selectedChatId, inputText, MessageType.TEXT);
     setInputText('');
-  };
-
-  const handleSendVoice = () => {
-     if (!selectedChatId) return;
-     // Determine dummy duration
-     const mins = Math.floor(recordingTime / 60);
-     const secs = recordingTime % 60;
-     const duration = `${mins}:${secs.toString().padStart(2, '0')}`;
-     
-     setIsRecording(false);
-     onSendMessage(selectedChatId, t.chat.voiceMessage, MessageType.AUDIO, duration);
   };
 
   const startCall = (type: 'AUDIO' | 'VIDEO') => {
@@ -226,15 +262,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     }`}>
                       {msg.type === MessageType.AUDIO ? (
                         <div className="flex items-center gap-3 min-w-[120px]">
-                           <button className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
-                              <Play size={14} fill="currentColor" />
-                           </button>
-                           <div className="flex flex-col flex-1">
-                              <div className="h-1 bg-white/30 rounded-full w-full mb-1 overflow-hidden">
-                                <div className="h-full bg-white w-1/3"></div>
-                              </div>
-                              <span className="text-xs opacity-70">{msg.audioDuration}</span>
-                           </div>
+                           <audio src={msg.text} controls className="w-full h-8" />
+                           <span className="text-xs opacity-70 whitespace-nowrap">{msg.audioDuration}</span>
                         </div>
                       ) : (
                         <p className="text-sm">{msg.text}</p>
@@ -284,9 +313,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     </button>
                   ) : (
                      <button 
-                      onMouseDown={() => setIsRecording(true)}
-                      onMouseUp={handleSendVoice}
-                      onMouseLeave={() => setIsRecording(false)} // Cancel if dragged out
+                      onMouseDown={startRecording}
+                      onMouseUp={stopRecordingAndSend}
+                      onMouseLeave={() => { if(isRecording) stopRecordingAndSend(); }} // Simplify handling
                       className={`p-2 transition-all ${isRecording ? 'text-[#FF5B5B] scale-125' : 'text-[#707090] hover:text-[#F5F5FA]'}`}
                       title={t.chat.holdToRecord}
                      >

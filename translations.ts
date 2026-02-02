@@ -75,7 +75,15 @@ export const TRANSLATIONS = {
       shares: 'shares',
       hiddenTitle: 'Content Under Review',
       hiddenBody: 'This post has been flagged by our AI moderation system for potential policy violations.',
-      reveal: 'View Anyway (Admin)'
+      reveal: 'View Anyway (Admin)',
+      actions: {
+        edit: 'Edit Post',
+        delete: 'Delete Post',
+        save: 'Save',
+        cancel: 'Cancel',
+        follow: 'Follow',
+        unfollow: 'Unfollow'
+      }
     },
     explore: {
       search: 'Search Blend...',
@@ -89,6 +97,8 @@ export const TRANSLATIONS = {
       edit: 'Edit Profile',
       save: 'Save Profile',
       bio: 'Bio',
+      drawBanner: 'Draw Banner',
+      clearCanvas: 'Clear',
       noPosts: 'No posts yet',
       badges: {
         creator: 'CREATOR',
@@ -287,7 +297,15 @@ export const TRANSLATIONS = {
       shares: 'поделились',
       hiddenTitle: 'Контент на проверке',
       hiddenBody: 'Этот пост был скрыт системой ИИ за подозрение в нарушении правил сообщества.',
-      reveal: 'Показать (Админ)'
+      reveal: 'Показать (Админ)',
+      actions: {
+        edit: 'Редактировать',
+        delete: 'Удалить',
+        save: 'Сохранить',
+        cancel: 'Отмена',
+        follow: 'Подписаться',
+        unfollow: 'Отписаться'
+      }
     },
     explore: {
       search: 'Поиск в Blend...',
@@ -301,6 +319,8 @@ export const TRANSLATIONS = {
       edit: 'Ред. профиль',
       save: 'Сохранить',
       bio: 'О себе',
+      drawBanner: 'Нарисовать баннер',
+      clearCanvas: 'Очистить',
       noPosts: 'Пока нет постов',
       badges: {
         creator: 'СОЗДАТЕЛЬ',
@@ -499,7 +519,15 @@ export const TRANSLATIONS = {
       shares: '分享',
       hiddenTitle: '内容审核中',
       hiddenBody: '此帖子已被 AI 审核系统标记为潜在违规。',
-      reveal: '查看（管理员）'
+      reveal: '查看（管理员）',
+      actions: {
+        edit: '编辑帖子',
+        delete: '删除帖子',
+        save: '保存',
+        cancel: '取消',
+        follow: '关注',
+        unfollow: '取消关注'
+      }
     },
     explore: {
       search: '搜索 Blend...',
@@ -513,6 +541,8 @@ export const TRANSLATIONS = {
       edit: '编辑资料',
       save: '保存资料',
       bio: '简介',
+      drawBanner: '绘制横幅',
+      clearCanvas: '清除',
       noPosts: '暂无帖子',
       badges: {
         creator: '创作者',

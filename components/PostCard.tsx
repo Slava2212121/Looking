@@ -1,21 +1,28 @@
 
 import React, { useState, useRef } from 'react';
-import { Post, PostType } from '../types';
-import { Heart, MessageCircle, Share2, BarChart2, MoreHorizontal, Play, Pause, Volume2, Check, Info, Send, Crown, ShieldCheck, Shield, Zap, EyeOff, AlertTriangle, Eye, Ban } from 'lucide-react';
+import { Post, PostType, User } from '../types';
+import { Heart, MessageCircle, Share2, BarChart2, MoreHorizontal, Play, Pause, Volume2, Check, Info, Send, Crown, ShieldCheck, Shield, Zap, EyeOff, AlertTriangle, Eye, Ban, Trash2, Edit2, X, Save, UserPlus, UserMinus } from 'lucide-react';
 
 interface PostCardProps {
   post: Post;
+  currentUser: User;
   onLike: (id: string) => void;
   onComment: (id: string, text: string) => void;
+  onDelete: (id: string) => void;
+  onEdit: (id: string, newContent: string) => void;
+  onFollow: (userId: string) => void;
   t: any;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment, t }) => {
+const PostCard: React.FC<PostCardProps> = ({ post, currentUser, onLike, onComment, onDelete, onEdit, onFollow, t }) => {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showShareToast, setShowShareToast] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [forceReveal, setForceReveal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content);
   
   // Audio Player State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,6 +38,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment, t }) => {
   const isOfficial = post.author.isOfficial;
   const isActive = post.author.isActive;
   const isBanned = post.author.isBanned;
+
+  // PERMISSIONS
+  const isAuthor = currentUser.id === post.author.id;
+  const isAdmin = currentUser.role === 'ADMIN';
+  const isFollowing = currentUser.following.includes(post.author.id);
 
   // HIDDEN LOGIC
   const isHidden = post.isHidden && !forceReveal;
@@ -77,6 +89,12 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment, t }) => {
     setIsPlaying(!isPlaying);
   };
 
+  const handleSaveEdit = () => {
+      onEdit(post.id, editContent);
+      setIsEditing(false);
+      setShowMenu(false);
+  };
+
   return (
     <article className={`bg-[var(--bg-card)] border rounded-xl overflow-hidden hover:bg-[var(--bg-hover)] transition-colors mb-4 relative shadow-sm ${post.isFlagged ? 'border-[#FF5B5B]/50' : 'border-[var(--border)]'}`}>
       
@@ -107,7 +125,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment, t }) => {
 
       <div className="p-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 relative">
           <div className="flex items-center gap-3">
             <div className="relative">
                <img 
@@ -206,17 +224,84 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment, t }) => {
                    )}
                 </div>
              )}
-             <button className="text-[var(--text-muted)] hover:text-[var(--text-main)]">
-               <MoreHorizontal size={20} />
-             </button>
+             <div className="relative">
+                 <button 
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1"
+                 >
+                   <MoreHorizontal size={20} />
+                 </button>
+                 {showMenu && (
+                     <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl z-30 animate-in fade-in zoom-in duration-200 overflow-hidden">
+                        {!isAuthor && (
+                            <button 
+                                onClick={() => { onFollow(post.author.id); setShowMenu(false); }}
+                                className="w-full text-left px-4 py-3 text-sm hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2"
+                            >
+                                {isFollowing ? <UserMinus size={16} /> : <UserPlus size={16} />}
+                                {isFollowing ? t.post.actions.unfollow : t.post.actions.follow}
+                            </button>
+                        )}
+                        {(isAuthor || isAdmin) && (
+                            <>
+                                {isAuthor && (
+                                    <button 
+                                        onClick={() => { setIsEditing(true); setShowMenu(false); }}
+                                        className="w-full text-left px-4 py-3 text-sm hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2 text-[var(--text-main)]"
+                                    >
+                                        <Edit2 size={16} /> {t.post.actions.edit}
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => { onDelete(post.id); setShowMenu(false); }}
+                                    className="w-full text-left px-4 py-3 text-sm hover:bg-[#FF5B5B]/10 text-[#FF5B5B] transition-colors flex items-center gap-2"
+                                >
+                                    <Trash2 size={16} /> {t.post.actions.delete}
+                                </button>
+                            </>
+                        )}
+                        {!isAuthor && !isAdmin && (
+                            <div className="px-4 py-3 text-xs text-[var(--text-muted)] italic text-center">
+                                No actions available
+                            </div>
+                        )}
+                     </div>
+                 )}
+                 {showMenu && <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)}></div>}
+             </div>
           </div>
         </div>
 
-        {/* Text Content */}
-        {post.content && (
-          <p className="text-[var(--text-main)] text-sm md:text-base leading-relaxed mb-3 whitespace-pre-wrap">
-            {post.content}
-          </p>
+        {/* Text Content / Editing Mode */}
+        {isEditing ? (
+            <div className="mb-3">
+                <textarea 
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-3 text-sm text-[var(--text-main)] outline-none focus:border-[var(--primary)] resize-none"
+                    rows={4}
+                />
+                <div className="flex justify-end gap-2 mt-2">
+                    <button 
+                        onClick={() => setIsEditing(false)}
+                        className="px-3 py-1.5 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                    >
+                        {t.post.actions.cancel}
+                    </button>
+                    <button 
+                        onClick={handleSaveEdit}
+                        className="px-3 py-1.5 bg-[var(--primary)] text-white rounded-lg text-xs font-bold"
+                    >
+                        {t.post.actions.save}
+                    </button>
+                </div>
+            </div>
+        ) : (
+            post.content && (
+              <p className="text-[var(--text-main)] text-sm md:text-base leading-relaxed mb-3 whitespace-pre-wrap">
+                {post.content}
+              </p>
+            )
         )}
 
         {/* Audio Content */}

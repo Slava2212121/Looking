@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Image as ImageIcon, Film, Mic, Video, Send, UploadCloud, Trash2, StopCircle, Play, AlertCircle } from 'lucide-react';
 import { PostType, User } from '../types';
@@ -22,6 +23,8 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, onClose,
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const recordingInterval = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,6 +36,9 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, onClose,
     setRecordingTime(0);
     setError(null);
     if (recordingInterval.current) clearInterval(recordingInterval.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+       mediaRecorderRef.current.stop();
+    }
   }, [selectedType]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,20 +58,49 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, onClose,
     fileInputRef.current?.click();
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      // Stop Recording
-      setIsRecording(false);
-      if (recordingInterval.current) clearInterval(recordingInterval.current);
-      // Simulate creating a blob URL (in a real app, use MediaRecorder API)
-      setAudioBlobUrl('mock_audio_url'); 
-    } else {
-      // Start Recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(audioBlob);
+        setAudioBlobUrl(url);
+        stream.getTracks().forEach(track => track.stop()); // Stop mic usage
+      };
+
+      mediaRecorderRef.current.start();
       setIsRecording(true);
-      setAudioBlobUrl(null);
       recordingInterval.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      setError("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+     if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+        if (recordingInterval.current) clearInterval(recordingInterval.current);
+     }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
     }
   };
 
@@ -86,8 +121,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, onClose,
     let duration = undefined;
 
     if (selectedType === PostType.AUDIO) {
-       // In a real app, this would be the Blob URL or uploaded file URL
-       finalMediaUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"; // Mock MP3 for demo playback
+       finalMediaUrl = audioBlobUrl || '';
        duration = formatTime(recordingTime);
     }
 

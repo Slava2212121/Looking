@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Camera, Save, ShieldCheck, ChevronRight, AlertCircle } from 'lucide-react';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Camera, Save, ShieldCheck, ChevronRight, AlertCircle, PenTool, Eraser } from 'lucide-react';
 import { User } from '../types';
 
 interface EditProfileModalProps {
@@ -18,10 +19,80 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ currentUser, onClos
     bio: currentUser.bio || '',
     avatar: currentUser.avatar
   });
+  
+  // Canvas State
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [bannerImage, setBannerImage] = useState<string | undefined>(currentUser.banner);
+
+  useEffect(() => {
+    // Initialize canvas with existing banner if available
+    const canvas = canvasRef.current;
+    if (canvas && bannerImage) {
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = bannerImage;
+    }
+  }, []);
+
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDrawing(true);
+    draw(e);
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      setBannerImage(canvas.toDataURL());
+    }
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let x, y;
+
+    if ('touches' in e) {
+       x = e.touches[0].clientX - rect.left;
+       y = e.touches[0].clientY - rect.top;
+    } else {
+       x = (e as React.MouseEvent).clientX - rect.left;
+       y = (e as React.MouseEvent).clientY - rect.top;
+    }
+
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#5B8CFF'; // Primary color for drawing
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setBannerImage(undefined);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    onSave({
+       ...formData,
+       banner: bannerImage
+    });
     onClose();
   };
 
@@ -47,7 +118,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ currentUser, onClos
                  <Camera size={24} className="text-white" />
               </div>
             </div>
-            {/* Input for Avatar URL (Simplified for demo) */}
              <input 
               type="text" 
               placeholder="Avatar URL"
@@ -87,6 +157,46 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ currentUser, onClos
               onChange={(e) => setFormData({...formData, bio: e.target.value})}
               className="w-full bg-[#0B0B10] border border-[#202030] rounded-xl px-4 py-3 text-[#F5F5FA] outline-none focus:border-[#5B8CFF] transition-colors resize-none"
             />
+          </div>
+
+          {/* Canvas Banner Drawing */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+               <label className="text-xs text-[#707090] uppercase font-bold ml-1">{t.profile.drawBanner}</label>
+               <button 
+                type="button" 
+                onClick={clearCanvas} 
+                className="text-xs text-[#FF5B5B] flex items-center gap-1 hover:underline"
+               >
+                 <Eraser size={12} /> {t.profile.clearCanvas}
+               </button>
+            </div>
+            <div className="border border-[#202030] rounded-xl overflow-hidden bg-[#0B0B10] touch-none">
+               <canvas 
+                 ref={canvasRef}
+                 width={400}
+                 height={150}
+                 className="w-full h-auto cursor-crosshair block"
+                 onMouseDown={(e) => {
+                    const canvas = canvasRef.current;
+                    const ctx = canvas?.getContext('2d');
+                    ctx?.beginPath(); // Reset path
+                    startDrawing(e);
+                 }}
+                 onMouseMove={draw}
+                 onMouseUp={stopDrawing}
+                 onMouseLeave={stopDrawing}
+                 onTouchStart={(e) => {
+                    const canvas = canvasRef.current;
+                    const ctx = canvas?.getContext('2d');
+                    ctx?.beginPath();
+                    startDrawing(e);
+                 }}
+                 onTouchMove={draw}
+                 onTouchEnd={stopDrawing}
+               />
+            </div>
+            <p className="text-[10px] text-[#707090] italic">Draw something unique for your profile header.</p>
           </div>
 
           {/* Official Status Request Section */}

@@ -32,6 +32,9 @@ import {
   Laptop,
   ToggleLeft,
   ToggleRight,
+  UserPlus,
+  UserMinus,
+  Check
 } from 'lucide-react';
 import { CURRENT_USER, MOCK_POSTS, MOCK_CHATS, TRENDS } from './constants';
 import { FeedMode, Post, PostType, Language, Chat, Message, MessageType, User, Comment, Theme } from './types';
@@ -240,6 +243,8 @@ const App: React.FC = () => {
           isOfficial: false,
           isActive: false,
           isBanned: false,
+          followers: [],
+          following: [],
           avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random`
         };
       }
@@ -341,6 +346,7 @@ const App: React.FC = () => {
     setStats(prev => ({ ...prev, totalPosts: prev.totalPosts + 1 }));
   };
 
+  // POST ACTIONS
   const handleLike = (id: string) => {
     if (!checkRateLimit('LIKE')) return;
     setPosts(prev => prev.map(post => {
@@ -388,6 +394,34 @@ const App: React.FC = () => {
        }
        return post;
     }));
+  };
+
+  const handleDeletePost = (id: string) => {
+      setPosts(prev => prev.filter(p => p.id !== id));
+      setStats(prev => ({...prev, totalPosts: Math.max(0, prev.totalPosts - 1)}));
+  };
+
+  const handleEditPost = (id: string, newContent: string) => {
+      setPosts(prev => prev.map(p => {
+          if (p.id === id) {
+              return { ...p, content: newContent };
+          }
+          return p;
+      }));
+  };
+
+  const handleFollowToggle = (targetUserId: string) => {
+      // Mock follow logic: updates current user's following list
+      const isFollowing = currentUser.following.includes(targetUserId);
+      let newFollowing = [...currentUser.following];
+      
+      if (isFollowing) {
+          newFollowing = newFollowing.filter(id => id !== targetUserId);
+      } else {
+          newFollowing.push(targetUserId);
+      }
+
+      handleUpdateProfile({ following: newFollowing });
   };
 
   const handleMixChange = (key: 'friendsVsPopular' | 'textVsVideo', value: number) => {
@@ -461,10 +495,6 @@ const App: React.FC = () => {
      }
   };
 
-  const handleDeletePost = (postId: string) => {
-     setPosts(prev => prev.filter(p => p.id !== postId));
-  };
-
   const handleDismissReport = (postId: string) => {
      setPosts(prev => prev.map(p => {
         if (p.id === postId) {
@@ -535,11 +565,14 @@ const App: React.FC = () => {
   };
 
   const renderProfileView = () => {
-    const userPosts = posts.filter(p => p.author.id === currentUser.id);
-    const isCreator = currentUser.role === 'CREATOR';
-    const isModerator = currentUser.role === 'MODERATOR';
-    const isOfficial = currentUser.isOfficial;
-    const isActive = currentUser.isActive;
+    // For now, only viewing self. In a real app, this would take a userId param.
+    const userToView = currentUser; 
+    
+    const userPosts = posts.filter(p => p.author.id === userToView.id);
+    const isCreator = userToView.role === 'CREATOR';
+    const isModerator = userToView.role === 'MODERATOR';
+    const isOfficial = userToView.isOfficial;
+    const isActive = userToView.isActive;
     
     // Determine ring color
     let ringColor = '';
@@ -551,15 +584,22 @@ const App: React.FC = () => {
     return (
       <div className="max-w-[600px] mx-auto w-full">
         <div className="sticky top-16 lg:top-0 bg-[var(--bg-main)]/90 backdrop-blur-md z-30 px-4 py-3 border-b border-[var(--border)] flex items-center gap-4">
-          <h2 className="text-lg font-bold text-[var(--text-main)]">{currentUser.name}</h2>
+          <h2 className="text-lg font-bold text-[var(--text-main)]">{userToView.name}</h2>
         </div>
         
-        <div className="relative h-32 bg-gradient-to-r from-[var(--border)] to-[var(--bg-hover)]"></div>
+        {/* Banner Section */}
+        <div className="relative h-32 bg-[var(--bg-hover)] overflow-hidden">
+            {userToView.banner ? (
+                <img src={userToView.banner} alt="Banner" className="w-full h-full object-cover" />
+            ) : (
+                <div className="w-full h-full bg-gradient-to-r from-[var(--border)] to-[var(--bg-hover)]"></div>
+            )}
+        </div>
         
         <div className="px-4 pb-4">
           <div className="relative -mt-10 mb-3 flex justify-between items-end">
              <div className="relative">
-               <img src={currentUser.avatar} alt="" className={`w-20 h-20 rounded-full border-4 border-[var(--bg-main)] object-cover ${ringColor}`} />
+               <img src={userToView.avatar} alt="" className={`w-20 h-20 rounded-full border-4 border-[var(--bg-main)] object-cover ${ringColor}`} />
                {isCreator && (
                   <div className="absolute bottom-0 right-0 bg-red-500 p-1 rounded-full border border-[var(--bg-main)]">
                     <Crown size={12} className="text-white fill-white" />
@@ -577,33 +617,40 @@ const App: React.FC = () => {
                )}
              </div>
              <div className="flex items-center gap-2">
-               <div className="bg-[var(--bg-card)] border border-[var(--border)] px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm" title={`User ID: #${currentUser.staticId}`}>
+               <div className="bg-[var(--bg-card)] border border-[var(--border)] px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm" title={`User ID: #${userToView.staticId}`}>
                   <Hash size={14} className="text-[var(--primary)]" />
-                  <span className="text-[var(--text-main)] font-mono text-sm font-bold">{String(currentUser.staticId).padStart(4, '0')}</span>
+                  <span className="text-[var(--text-main)] font-mono text-sm font-bold">{String(userToView.staticId).padStart(4, '0')}</span>
                </div>
-               <button 
-                onClick={() => setIsEditProfileOpen(true)}
-                className="bg-[var(--bg-hover)] hover:bg-[var(--border)] text-[var(--text-main)] border border-[var(--border)] px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
-               >
-                 {t.profile.edit}
-               </button>
+               {userToView.id === currentUser.id ? (
+                    <button 
+                        onClick={() => setIsEditProfileOpen(true)}
+                        className="bg-[var(--bg-hover)] hover:bg-[var(--border)] text-[var(--text-main)] border border-[var(--border)] px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
+                    >
+                        {t.profile.edit}
+                    </button>
+               ) : (
+                    // Logic to follow other users would go here, currently viewing self mostly
+                    <button className="bg-[var(--primary)] text-white px-4 py-1.5 rounded-full text-sm font-medium">
+                        Follow
+                    </button>
+               )}
              </div>
           </div>
           
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-[var(--text-main)]">{currentUser.name}</h1>
+            <h1 className="text-xl font-bold text-[var(--text-main)]">{userToView.name}</h1>
             {isCreator && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wide">{t.profile.badges.creator}</span>}
           </div>
-          <p className="text-[var(--text-muted)] text-sm mb-2">{currentUser.handle}</p>
-          {currentUser.bio && <p className="text-[var(--text-muted)] text-sm mb-4">{currentUser.bio}</p>}
+          <p className="text-[var(--text-muted)] text-sm mb-2">{userToView.handle}</p>
+          {userToView.bio && <p className="text-[var(--text-muted)] text-sm mb-4">{userToView.bio}</p>}
           
           <div className="flex gap-4 mb-6 border-b border-[var(--border)] pb-4">
              <div className="flex gap-1">
-               <span className="text-[var(--text-main)] font-bold">0</span>
+               <span className="text-[var(--text-main)] font-bold">{userToView.following.length}</span>
                <span className="text-[var(--text-muted)]">{t.profile.following}</span>
              </div>
              <div className="flex gap-1">
-               <span className="text-[var(--text-main)] font-bold">0</span>
+               <span className="text-[var(--text-main)] font-bold">{userToView.followers.length}</span>
                <span className="text-[var(--text-muted)]">{t.profile.followers}</span>
              </div>
           </div>
@@ -611,16 +658,30 @@ const App: React.FC = () => {
           <h3 className="font-bold text-[var(--text-main)] mb-4 text-lg">{t.profile.posts}</h3>
           
           {userPosts.length > 0 ? (
-             userPosts.map(post => <PostCard key={post.id} post={post} onLike={handleLike} onComment={handleComment} t={t} />)
+             userPosts.map(post => (
+                <PostCard 
+                    key={post.id} 
+                    post={post} 
+                    currentUser={currentUser}
+                    onLike={handleLike} 
+                    onComment={handleComment}
+                    onDelete={handleDeletePost}
+                    onEdit={handleEditPost}
+                    onFollow={handleFollowToggle}
+                    t={t} 
+                />
+             ))
           ) : (
             <div className="text-center py-12 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] border-dashed">
                <p className="text-[var(--text-muted)]">{t.profile.noPosts}</p>
-               <button 
-                 onClick={() => setIsPostModalOpen(true)}
-                 className="mt-2 text-[var(--primary)] text-sm font-medium hover:underline"
-                >
-                  {t.create.title}
-               </button>
+               {userToView.id === currentUser.id && (
+                <button 
+                    onClick={() => setIsPostModalOpen(true)}
+                    className="mt-2 text-[var(--primary)] text-sm font-medium hover:underline"
+                    >
+                    {t.create.title}
+                </button>
+               )}
             </div>
           )}
         </div>
@@ -939,8 +1000,12 @@ const App: React.FC = () => {
                   <PostCard 
                     key={post.id} 
                     post={post} 
+                    currentUser={currentUser}
                     onLike={handleLike} 
                     onComment={handleComment}
+                    onDelete={handleDeletePost}
+                    onEdit={handleEditPost}
+                    onFollow={handleFollowToggle}
                     t={t} 
                   />
                 )) : (

@@ -8,12 +8,15 @@ export interface User {
   name: string;
   handle: string;
   avatar: string;
+  banner?: string; // Base64 Data URL for hand-drawn banner
   bio?: string;
   verified?: boolean;
   isOfficial?: boolean; // Yellow Official Status
   isActive?: boolean; // Green Active Status
   isBanned?: boolean; // New: Banned status
-  role?: UserRole; 
+  role?: UserRole;
+  followers: string[]; // List of user IDs following this user
+  following: string[]; // List of user IDs this user follows
 }
 
 export enum PostType {
